@@ -1,0 +1,124 @@
+from PIL import Image
+import numpy as np
+import heapq
+from collections import defaultdict
+
+# Comprimir imagen utilizando el proceso de compresión completo
+def compress_image(quality_factor):
+    # Ruta completa de la imagen en la carpeta "imagen" en el escritorio
+    image_path = r"C:\Users\Raul Perez\Desktop\imagen\imagen_originial.jpg"
+    
+    # Cargar la imagen original
+    imagen_original = Image.open(image_path)   #0000000 AQUI HAY UN ERROR
+
+# Forward Transition (Transformación directa)
+def forward_transition(image):
+    image = image.convert('L')
+    transformed_image = np.array(image).astype(float)
+    transformed_image = np.fft.dct(transformed_image, norm='ortho')
+    return transformed_image
+
+# Quantization (Cuantización)
+def quantization(transformed_image, quality_factor):
+    quality_matrix = np.array([[16, 11, 10, 16, 24, 40, 51, 61],
+                               [12, 12, 14, 19, 26, 58, 60, 55],
+                               [14, 13, 16, 24, 40, 57, 69, 56],
+                               [14, 17, 22, 29, 51, 87, 80, 62],
+                               [18, 22, 37, 56, 68, 109, 103, 77],
+                               [24, 35, 55, 64, 81, 104, 113, 92],
+                               [49, 64, 78, 87, 103, 121, 120, 101],
+                               [72, 92, 95, 98, 112, 100, 103, 99]])
+    quantized_image = np.round(transformed_image / (quality_matrix * quality_factor))
+    return quantized_image
+
+# Inverse Quantization (Cuantización inversa)
+def inverse_quantization(quantized_image, quality_factor):
+    quality_matrix = np.array([[16, 11, 10, 16, 24, 40, 51, 61],
+                               [12, 12, 14, 19, 26, 58, 60, 55],
+                               [14, 13, 16, 24, 40, 57, 69, 56],
+                               [14, 17, 22, 29, 51, 87, 80, 62],
+                               [18, 22, 37, 56, 68, 109, 103, 77],
+                               [24, 35, 55, 64, 81, 104, 113, 92],
+                               [49, 64, 78, 87, 103, 121, 120, 101],
+                               [72, 92, 95, 98, 112, 100, 103, 99]])
+    inverse_quantized_image = quantized_image * (quality_matrix * quality_factor)
+    return inverse_quantized_image
+
+# Backward Transform (Transformación inversa)
+def backward_transform(inverse_quantized_image):
+    transformed_image = np.fft.idct(inverse_quantized_image, norm='ortho')
+    transformed_image = np.round(transformed_image).astype(int)
+    transformed_image = np.clip(transformed_image, 0, 255)
+    return transformed_image
+
+# Entropy Coding (Codificación de entropía) - Implementación del algoritmo Huffman
+def entropy_coding(quantized_image):
+    frequencies = defaultdict(int)
+    for row in quantized_image:
+        for pixel in row:
+            frequencies[pixel] += 1
+
+    heap = [[weight, [symbol, ""]] for symbol, weight in frequencies.items()]
+    heapq.heapify(heap)
+    while len(heap) > 1:
+        lo = heapq.heappop(heap)
+        hi = heapq.heappop(heap)
+        for pair in lo[1:]:
+            pair[1] = '0' + pair[1]
+        for pair in hi[1:]:
+            pair[1] = '1' + pair[1]
+        heapq.heappush(heap, [lo[0] + hi[0]] + lo[1:] + hi[1:])
+
+    huffman_codes = dict(heapq.heappop(heap)[1:])
+
+    encoded_image = ""
+    for row in quantized_image:
+        for pixel in row:
+            encoded_image += huffman_codes[pixel]
+
+    return encoded_image, huffman_codes
+
+# Comprimir imagen utilizando el proceso de compresión completo
+def compress_image(image_path, quality_factor):
+    # Cargar la imagen original
+    imagen_original = Image.open(image_path)
+
+    # Forward Transition (Transformación directa)
+    transformed_image = forward_transition(imagen_original)
+
+    # Quantization (Cuantización)
+    quantized_image = quantization(transformed_image, quality_factor)
+
+    # Entropy Coding (Codificación de entropía)
+    encoded_image, huffman_codes = entropy_coding(quantized_image)
+
+    # Inverse Quantization (Cuantización inversa)
+    inverse_quantized_image = inverse_quantization(quantized_image, quality_factor)
+
+    # Backward Transform (Transformación inversa)
+    compressed_image = backward_transform(inverse_quantized_image)
+
+    # Crear una imagen a partir de los valores comprimidos
+    compressed_image = Image.fromarray(compressed_image.astype(np.uint8))
+
+
+    # Mostrar información de la imagen original y comprimida
+    print("Información de la imagen original:")
+    print("Formato:", imagen_original.format)
+    print("Tamaño:", imagen_original.size)
+    print("Modo de color:", imagen_original.mode)
+
+    print("\nInformación de la imagen comprimida:")
+    print("Formato:", compressed_image.format)
+    print("Tamaño:", compressed_image.size)
+    print("Modo de color:", compressed_image.mode)
+
+    # Mostrar información de la codificación de entropía
+    print("\nInformación de la codificación de entropía:")
+    print("Tamaño de la imagen comprimida:", len(encoded_image), "bits")
+    print("Tabla de códigos Huffman:")
+    for symbol, code in huffman_codes.items():
+        print(f"Símbolo: {symbol} - Código: {code}")
+
+# Ejemplo de compresión de imagen
+compress_image('imagen_original.jpg', 2)
